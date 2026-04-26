@@ -1,0 +1,21 @@
+# Video files
+*.mp4
+*.mov
+*.avi
+*.mkv
+
+# Generated folders
+chunks/
+processed/
+output/
+logs/
+metrics/
+
+# Temporary files
+file_list.txt
+__pycache__/
+*.pyc
+
+# OS / editor
+.DS_Store
+.vscode/

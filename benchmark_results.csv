@@ -1,0 +1,10 @@
+input_size,strategy,runtime_seconds,output_file
+24s,single,1.1,output/24s_single.mp4
+24s,static,5.2,output/24s_static.mp4
+24s,dynamic,2.47,output/24s_dynamic.mp4
+120s,single,4.5,output/120s_single.mp4
+120s,static,26.11,output/120s_static.mp4
+120s,dynamic,13.24,output/120s_dynamic.mp4
+full,single,15.36,output/full_single.mp4
+full,static,90.02,output/full_static.mp4
+full,dynamic,45.89,output/full_dynamic.mp4

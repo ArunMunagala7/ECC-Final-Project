@@ -1,0 +1,38 @@
+import subprocess
+import os
+
+WORKERS = ["10.4.36.67", "10.4.36.101"]  # replace
+
+def process_distributed(chunks):
+    processed_chunks = []
+
+    for i, chunk in enumerate(chunks):
+        worker = WORKERS[i % len(WORKERS)]
+
+        remote_input = f"~/chunk_{i}.mp4"
+        remote_output = f"~/out_{i}.mp4"
+        local_output = f"processed/out_{i}.mp4"
+
+        # copy chunk to worker
+        subprocess.run([
+            "scp", chunk, f"ubuntu@{worker}:{remote_input}"
+        ], check=True)
+
+        # run ffmpeg on worker
+        subprocess.run([
+            "ssh", f"ubuntu@{worker}",
+            f"ffmpeg -y -i {remote_input} -vf scale=640:360 {remote_output}"
+        ], check=True)
+
+        # copy result back
+        os.makedirs("processed", exist_ok=True)
+
+        subprocess.run([
+            "scp",
+            f"ubuntu@{worker}:{remote_output}",
+            local_output
+        ], check=True)
+
+        processed_chunks.append(local_output)
+
+    return processed_chunks

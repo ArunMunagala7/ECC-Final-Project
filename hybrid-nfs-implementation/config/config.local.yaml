@@ -1,0 +1,22 @@
+# Local testing configuration (for Mac)
+
+# Local temporary directory
+nfs_base_dir: "/tmp/video_processing"
+
+# SSH configuration (not used for local testing)
+ssh_user: "localuser"
+ssh_key: "~/.ssh/id_rsa"
+
+# Worker nodes (not used for local testing - will create LocalWorkers instead)
+workers:
+  - host: "localhost"
+  - host: "localhost"
+  - host: "localhost"
+
+# Video processing settings
+segment_duration: 5
+codec: "libx264"
+bitrate: "2M"
+preset: "medium"
+max_retries: 2
+timeout: 300

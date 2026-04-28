@@ -27,7 +27,7 @@ class Master:
         )
         self.merger = VideoMerger()
     
-    def process_static(self, video_path, workers):
+    def process_static(self, video_path, workers, max_retries=2):
         """
         Static scheduling: Fixed assignment of chunks to workers
         Chunk i → Worker (i % num_workers)
@@ -35,10 +35,32 @@ class Master:
         Args:
             video_path: Input video path
             workers: List of worker instances (RemoteWorker or LocalWorker)
+            max_retries: Maximum retry attempts for failed tasks
             
         Returns:
             Dict with processing statistics
         """
+        start_time = time.time()
+        
+        # Step 0: Check worker health
+        print(f"\n=== Static Scheduling with {len(workers)} workers ===")
+        print(f"\nChecking worker health...")
+        healthy_workers = []
+        for worker in workers:
+            if worker.check_health():
+                print(f"  ✓ Worker {worker.worker_id} is healthy")
+                healthy_workers.append(worker)
+            else:
+                print(f"  ✗ Worker {worker.worker_id} is unreachable")
+        
+        if not healthy_workers:
+            raise RuntimeError("No healthy workers available")
+        
+        if len(healthy_workers) < len(workers):
+            print(f"\n⚠️  Warning: Only {len(healthy_workers)}/{len(workers)} workers available")
+        
+        # Use only healthy workers
+        workers = healthy_workers
         start_time = time.time()
         
         nfs_base = self.config.get('nfs_base_dir', '/tmp/video_processing')
@@ -51,8 +73,6 @@ class Master:
         os.makedirs(chunk_dir, exist_ok=True)
         os.makedirs(processed_dir, exist_ok=True)
         os.makedirs(output_dir, exist_ok=True)
-        
-        print(f"\n=== Dynamic Scheduling with {len(workers)} workers ===")
         
         # Step 1: Segment video into NFS directory
         print(f"Segmenting video into {chunk_dir}...")
@@ -72,14 +92,16 @@ class Master:
                 'worker_id': worker_idx,
                 'codec': self.config.get('codec', 'libx264'),
                 'bitrate': self.config.get('bitrate', '2M'),
-                'preset': self.config.get('preset', 'medium')
+                'preset': self.config.get('preset', 'medium'),
+                'retry_count': 0
             }
             tasks.append(task)
             print(f"  Chunk {i} → Worker {worker_idx}")
         
-        # Step 3: Process tasks in parallel using thread pool
+        # Step 3: Process tasks with retry logic
         print(f"\nProcessing {num_segments} chunks...")
         results = []
+        failed_tasks = []
         
         with ThreadPoolExecutor(max_workers=len(workers)) as executor:
             futures = []
@@ -93,16 +115,50 @@ class Master:
             completed = 0
             for future, task in futures:
                 result = future.result()
-                results.append(result)
                 completed += 1
                 
-                status = "✓" if result['success'] else "✗"
-                duration = result.get('duration', 0)
-                print(f"  [{completed}/{num_segments}] {status} Chunk {task['id']} "
-                      f"(Worker {result['worker_id']}, {duration:.2f}s)")
+                if result['success']:
+                    results.append(result)
+                    status = "✓"
+                    duration = result.get('duration', 0)
+                    print(f"  [{completed}/{num_segments}] {status} Chunk {task['id']} "
+                          f"(Worker {result['worker_id']}, {duration:.2f}s)")
+                else:
+                    # Retry failed tasks
+                    if task['retry_count'] < max_retries:
+                        task['retry_count'] += 1
+                        print(f"  [{completed}/{num_segments}] ⟳ Chunk {task['id']} failed, "
+                              f"retrying (attempt {task['retry_count']}/{max_retries})...")
+                        # Reassign to next available worker
+                        task['worker_id'] = (task['worker_id'] + 1) % len(workers)
+                        worker = workers[task['worker_id']]
+                        future = executor.submit(worker.process_task, task)
+                        futures.append((future, task))
+                    else:
+                        failed_tasks.append((task, result))
+                        print(f"  [{completed}/{num_segments}] ✗ Chunk {task['id']} "
+                              f"failed permanently after {max_retries} retries")
         
-        # Step 4: Merge processed segments
-        print(f"\nMerging processed segments...")
+        # Add failed tasks to results for statistics
+        for task, result in failed_tasks:
+            results.append(result)
+        
+        # Step 4: Validate results before merging
+        print(f"\nValidating processed segments...")
+        import os
+        valid_outputs = []
+        for task in tasks:
+            output_file = task['output_path']
+            if os.path.exists(output_file) and os.path.getsize(output_file) > 1000:
+                valid_outputs.append(output_file)
+            else:
+                print(f"  ⚠️  Warning: Chunk {task['id']} output missing or corrupted")
+        
+        if len(valid_outputs) < num_segments:
+            print(f"\n⚠️  Warning: Only {len(valid_outputs)}/{num_segments} segments valid")
+        
+        # Step 5: Merge processed segments
+        print(f"\nMerging {len(valid_outputs)} valid segments...")
         output_path = f"{output_dir}/final_static.mp4"
         self.merger.merge_segments(processed_dir, output_path)
         
@@ -142,6 +198,27 @@ class Master:
         Returns:
             Dict with processing statistics
         """
+        start_time = time.time()
+        
+        # Step 0: Check worker health
+        print(f"\n=== Dynamic Scheduling with {len(workers)} workers ===")
+        print(f"\nChecking worker health...")
+        healthy_workers = []
+        for worker in workers:
+            if worker.check_health():
+                print(f"  ✓ Worker {worker.worker_id} is healthy")
+                healthy_workers.append(worker)
+            else:
+                print(f"  ✗ Worker {worker.worker_id} is unreachable")
+        
+        if not healthy_workers:
+            raise RuntimeError("No healthy workers available")
+        
+        if len(healthy_workers) < len(workers):
+            print(f"\n⚠️  Warning: Only {len(healthy_workers)}/{len(workers)} workers available")
+        
+        # Use only healthy workers
+        workers = healthy_workers
         start_time = time.time()
         
         nfs_base = self.config.get('nfs_base_dir', '/tmp/video_processing')

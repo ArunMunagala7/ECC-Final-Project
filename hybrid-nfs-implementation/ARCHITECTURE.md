@@ -15,6 +15,7 @@
 │  │  Main Controller (main.py)                               │  │
 │  │  • Loads configuration                                   │  │
 │  │  • Creates workers (RemoteWorker/LocalWorker)           │  │
+│  │  • Health checks workers before processing              │  │
 │  │  • Initiates processing pipeline                        │  │
 │  └──────────────────────────────────────────────────────────┘  │
 │                           │                                      │
@@ -22,7 +23,7 @@
 │  │            │                       │            │           │
 │  ▼            ▼                       ▼            ▼           │
 │  Segmenter  Scheduler              Merger      Monitor         │
-│  (split)    (assign)              (combine)   (track)          │
+│  (split)    (assign+retry)        (combine)   (track)          │
 └──┬────────────┬─────────────────────┬────────────────────────┬─┘
    │            │                     │                        │
    │            │                     │                        │
@@ -47,9 +48,9 @@
        ▼              ▼              ▼              ▼           │
 ┌───────────┐  ┌───────────┐  ┌───────────┐  ┌───────────┐   │
 │  WORKER 0 │  │  WORKER 1 │  │  WORKER 2 │  │  WORKER 3 │   │
-│           │  │           │  │           │  │           │   │
-│  FFmpeg   │  │  FFmpeg   │  │  FFmpeg   │  │  FFmpeg   │   │
-│  Process  │  │  Process  │  │  Process  │  │  Process  │   │
+│  ✓ Healthy│  │  ✓ Healthy│  │  ✗ Down   │  │  ✓ Healthy│   │
+│  FFmpeg   │  │  FFmpeg   │  │           │  │  FFmpeg   │   │
+│  Process  │  │  Process  │  │  (skipped)│  │  Process  │   │
 │           │  │           │  │           │  │           │   │
 │ .199      │  │ .58       │  │ .92       │  │ .111      │   │
 └───────────┘  └───────────┘  └───────────┘  └───────────┘   │
@@ -61,6 +62,124 @@
                                      ▼
                             FINAL OUTPUT VIDEO
 ```
+
+---
+
+## Fault Tolerance Features
+
+### 1. Worker Health Checks
+
+Before processing begins, the system verifies each worker is reachable:
+
+```
+Health Check Process:
+┌─────────────┐
+│ Master      │
+│ starts      │
+└──────┬──────┘
+       │
+       ├─ SSH ping Worker 0  ───► ✓ Healthy
+       ├─ SSH ping Worker 1  ───► ✓ Healthy
+       ├─ SSH ping Worker 2  ───► ✗ Unreachable (network down)
+       └─ SSH ping Worker 3  ───► ✓ Healthy
+       │
+       ▼
+┌─────────────┐
+│ Process with│
+│ 3 workers   │
+│ (skip #2)   │
+└─────────────┘
+```
+
+**Implementation:**
+- Simple SSH echo command: `ssh worker 'echo healthy'`
+- 5-second timeout per worker
+- Failed workers excluded from task assignment
+- System continues with available workers
+
+### 2. Task Retry Mechanism
+
+Both static and dynamic scheduling retry failed tasks up to `max_retries=2`:
+
+```
+Task Failure & Retry Flow:
+┌─────────────┐
+│ Chunk 3     │
+│ → Worker 1  │
+└──────┬──────┘
+       │
+       ▼
+   Processing...
+       │
+       ▼
+   ✗ FAILED
+   (timeout/error)
+       │
+       ▼
+┌─────────────┐
+│ Retry 1/2   │
+│ → Worker 2  │  (reassign to next worker)
+└──────┬──────┘
+       │
+       ▼
+   Processing...
+       │
+       ▼
+   ✗ FAILED
+       │
+       ▼
+┌─────────────┐
+│ Retry 2/2   │
+│ → Worker 3  │
+└──────┬──────┘
+       │
+       ▼
+   ✓ SUCCESS
+```
+
+**Features:**
+- Automatic task requeuing on failure
+- Worker rotation (static) or queue resubmission (dynamic)
+- Maximum 2 retry attempts per task
+- Detailed logging of retry attempts
+
+### 3. Result Validation
+
+Before merging, the system validates all output chunks:
+
+```
+Validation Checks:
+┌─────────────────┐
+│ All chunks      │
+│ processed       │
+└────────┬────────┘
+         │
+         ▼
+    Validation
+         │
+    ┌────┴────┬────────┬────────┐
+    │         │        │        │
+    ▼         ▼        ▼        ▼
+ Check     Check    Check    Check
+ exists    size     size     exists
+   │         │        │        │
+   ▼         ▼        ▼        ▼
+  ✓ OK     ✓ 2MB    ✗ 500b   ✓ OK
+           VALID    CORRUPT  VALID
+         │
+         ▼
+┌─────────────────┐
+│ Merge only      │
+│ valid chunks    │
+│ (skip corrupt)  │
+└─────────────────┘
+```
+
+**Checks:**
+- File exists in processed directory
+- File size > 1KB (not corrupted/empty)
+- Warnings logged for invalid outputs
+- Merge proceeds with valid chunks only
 
 ---
 

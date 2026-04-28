@@ -28,6 +28,7 @@ class RemoteWorker:
         self.status = 'idle'
         self.tasks_completed = 0
         self.tasks_failed = 0
+        self.is_healthy = True
     
     def process_task(self, task):
         """
@@ -119,6 +120,44 @@ class RemoteWorker:
         
         return ssh_cmd
     
+    def check_health(self, timeout=5):
+        """
+        Check if worker is reachable via SSH
+        
+        Args:
+            timeout: SSH connection timeout in seconds
+            
+        Returns:
+            bool: True if worker is healthy, False otherwise
+        """
+        try:
+            # Simple SSH echo command to test connectivity
+            ssh_cmd = f"ssh "
+            
+            if self.ssh_key:
+                ssh_cmd += f"-i {self.ssh_key} "
+            
+            ssh_cmd += f"-o StrictHostKeyChecking=no "
+            ssh_cmd += f"-o ConnectTimeout={timeout} "
+            ssh_cmd += f"{self.ssh_user}@{self.ssh_host} "
+            ssh_cmd += "'echo healthy'"
+            
+            result = subprocess.run(
+                ssh_cmd,
+                shell=True,
+                capture_output=True,
+                text=True,
+                timeout=timeout + 1
+            )
+            
+            self.is_healthy = (result.returncode == 0 and 'healthy' in result.stdout)
+            return self.is_healthy
+            
+        except Exception as e:
+            print(f"  ⚠️  Worker {self.worker_id} health check failed: {str(e)}")
+            self.is_healthy = False
+            return False
+    
     def get_status(self):
         """Get worker status"""
         return {
@@ -126,7 +165,8 @@ class RemoteWorker:
             'status': self.status,
             'tasks_completed': self.tasks_completed,
             'tasks_failed': self.tasks_failed,
-            'ssh_host': self.ssh_host
+            'ssh_host': self.ssh_host,
+            'is_healthy': self.is_healthy
         }
 
 
@@ -141,6 +181,12 @@ class LocalWorker:
         self.status = 'idle'
         self.tasks_completed = 0
         self.tasks_failed = 0
+        self.is_healthy = True
+    
+    def check_health(self, timeout=5):
+        """Local workers are always healthy"""
+        self.is_healthy = True
+        return True
     
     def process_task(self, task):
         """Process task locally (for testing)"""
@@ -210,5 +256,6 @@ class LocalWorker:
             'status': self.status,
             'tasks_completed': self.tasks_completed,
             'tasks_failed': self.tasks_failed,
-            'ssh_host': 'localhost'
+            'ssh_host': 'localhost',
+            'is_healthy': self.is_healthy
         }

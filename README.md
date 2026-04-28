@@ -22,6 +22,26 @@ Built a distributed video processing framework that splits videos into chunks, p
 - **Worker Nodes**: Process video chunks with FFmpeg
 - **NFS Storage**: Shared filesystem for zero-copy file access
 - **Communication**: SSH remote execution from master to workers
+- **Fault Tolerance**: Health checks, automatic retries, result validation
+
+## Features
+
+### Core Functionality
+- **Video Segmentation**: Splits videos into equal-duration chunks
+- **Distributed Processing**: Parallel FFmpeg execution across multiple workers
+- **Result Merging**: Combines processed chunks into final output
+- **Dual Scheduling**: Static (round-robin) and Dynamic (queue-based) strategies
+
+### Fault Tolerance
+- **Worker Health Checks**: SSH ping verification before task assignment
+- **Automatic Retries**: Failed tasks retry up to 2 times with worker rotation
+- **Result Validation**: Checks output file existence and integrity before merging
+- **Graceful Degradation**: Continues with available workers if some fail
+
+### Performance
+- Dynamic scheduling 16% faster than static (local)
+- 100% success rate in distributed cloud tests
+- Handles worker failures without manual intervention
 
 ## Quick Start
 

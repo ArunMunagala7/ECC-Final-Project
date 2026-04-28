@@ -1,109 +1,123 @@
-# Elastic Distributed Video Processing Framework
+# Distributed Video Processing System
 
-A distributed video processing system with dynamic workload partitioning for cloud deployment.
+ECC Final Project - Spring 2026
 
-## Team Members
+## Team
 - Anuj Prakash (asprakas@iu.edu)
 - Arun Munagala (armunaga@iu.edu)
 - Shreyas Amit Dhekane (sdhekane@iu.edu)
 
-## Features
-- Master-worker architecture with dynamic task scheduling
-- Multiple workload partitioning strategies (static vs dynamic)
-- FFmpeg-based video processing
-- Performance metrics and evaluation tools
-- Local simulation and cloud deployment support
+## Overview
 
-## Prerequisites
+Built a distributed video processing framework that splits videos into chunks, processes them across multiple cloud workers in parallel, and merges results. Compares static vs dynamic scheduling strategies.
 
-### Local Development
-```bash
-# Install FFmpeg
-brew install ffmpeg
-
-# Install Python dependencies
-pip install -r requirements.txt
-```
-
-### Cloud Deployment (Jetstream2)
-- Access to Jetstream2 infrastructure
-- SSH key configuration
-- Shared storage setup (NFS or cloud storage)
-
-## Project Structure
-```
-├── src/
-│   ├── master/          # Master node coordination
-│   ├── worker/          # Worker node processing
-│   ├── core/            # Core utilities (segmentation, merge, queue)
-│   └── evaluation/      # Metrics and performance analysis
-├── config/              # Configuration files
-├── scripts/             # Deployment and helper scripts
-├── tests/               # Unit and integration tests
-└── demo/                # Demo videos and examples
-```
-
-## Quick Start
-
-### Local Testing
-```bash
-# Run with dynamic scheduling (default)
-python src/main.py --input demo/sample.mp4 --output output/result.mp4 --workers 2
-
-# Run with static partitioning
-python src/main.py --input demo/sample.mp4 --output output/result.mp4 --workers 2 --strategy static
-
-# Run single machine baseline
-python src/main.py --input demo/sample.mp4 --output output/result.mp4 --workers 1 --strategy single
-```
-
-### Cloud Deployment
-```bash
-# Deploy to Jetstream2
-./scripts/deploy.sh
-
-# Run distributed processing
-./scripts/run_distributed.sh --input video.mp4 --workers 4
-```
-
-## Configuration
-
-Edit `config/config.yaml` to customize:
-- Chunk size and duration
-- Worker configuration
-- Storage paths
-- Processing parameters
-
-## Evaluation
-
-```bash
-# Run benchmark comparison
-python src/evaluation/benchmark.py --input demo/sample.mp4 --workers 1,2,4,8
-
-# Generate performance report
-python src/evaluation/report.py --results results/
-```
+**Key Results:**
+- Dynamic scheduling: 16% faster than static (local testing)
+- 100% success rate across all distributed tests
+- Successfully deployed on Jetstream2 (5 VMs: 1 master + 4 workers)
 
 ## Architecture
 
-### Master Node
-- Accepts input video
-- Splits video into segments
-- Manages task queue
-- Assigns work to workers
-- Monitors completion status
-- Triggers final merge
+- **Master Node**: Splits videos, assigns work, merges output
+- **Worker Nodes**: Process video chunks with FFmpeg
+- **NFS Storage**: Shared filesystem for zero-copy file access
+- **Communication**: SSH remote execution from master to workers
 
-### Worker Nodes
-- Fetch tasks from queue
-- Process video segments with FFmpeg
-- Write outputs to shared storage
-- Report completion
+## Quick Start
 
-### Workload Strategies
-1. **Single Machine**: Baseline sequential processing
-2. **Static Partitioning**: Fixed task assignment per worker
-3. **Dynamic Scheduling**: Queue-based task fetching
+### Requirements
+```bash
+# Install FFmpeg
+brew install ffmpeg  # macOS
+sudo apt install ffmpeg  # Ubuntu
 
-## License
-Academic project - Indiana University Bloomington
+# Python 3.8+
+pip install -r requirements.txt
+```
+
+### Local Testing
+```bash
+cd hybrid-nfs-implementation
+
+# Dynamic scheduling
+python3 src/main.py --input test_videos/test_input.mp4 \
+                    --strategy dynamic \
+                    --config config/config.local.yaml
+
+# Static scheduling
+python src/main.py --input demo/sample.mp4 --output output/result.mp4 --workers 2
+
+python3 src/main.py --input test_videos/test_input.mp4 \
+                    --strategy static \
+                    --config config/config.local.yaml
+```
+
+### Cloud Deployment (Jetstream2)
+
+**Setup:**
+1. Create 5 VMs (1 master + 4 workers)
+2. Set up NFS server on master
+3. Mount NFS on all workers
+4. Configure SSH keys for passwordless authentication
+5. Deploy code to master VM
+
+**Run:**
+```bash
+# SSH to master
+ssh exouser@<master-ip>
+
+# Run distributed processing
+cd ~/video_processing
+python3 src/main.py --input /home/ubuntu/nfs_shared/test_input.mp4 \
+                    --strategy dynamic \
+                    --config config/config.yaml \
+                    --remote
+```
+
+See `hybrid-nfs-implementation/IMPLEMENTATION_REPORT.md` for detailed setup instructions.
+
+## Performance Results
+
+| Environment | Strategy | Time | Workers |
+|-------------|----------|------|---------|
+| Local (Mac) | Dynamic | 0.79s | 3 |
+| Local (Mac) | Static | 0.94s | 3 |
+| Cloud (Jetstream2) | Dynamic | 6.03s | 4 |
+| Cloud (Jetstream2) | Static | 6.08s | 4 |
+
+**Success Rate:** 100% across all tests
+
+## Project Structure
+
+```
+hybrid-nfs-implementation/
+├── src/
+│   ├── main.py              # Entry point
+│   ├── core/                # Video segmentation & merging
+│   ├── master/              # Orchestration logic
+│   └── worker/              # Worker implementations
+├── config/
+│   ├── config.yaml          # Jetstream configuration
+│   └── config.local.yaml    # Local testing configuration
+└── scripts/                 # Setup and deployment scripts
+```
+
+## Documentation
+
+- **`PRESENTATION_DEMO_GUIDE.md`** - Complete demo walkthrough for presentations
+- **`hybrid-nfs-implementation/IMPLEMENTATION_REPORT.md`** - Technical details and setup
+- **`ECC_MidTerm_Project.pdf`** - Original project proposal
+
+## Technologies
+
+- Python 3 (ThreadPoolExecutor for concurrency)
+- FFmpeg (video processing)
+- NFS (shared storage)
+- SSH (remote execution)
+- Jetstream2 (cloud platform)
+
+## Course Info
+
+Indiana University Bloomington  
+ECC - Elastic Cloud Computing  
+Spring 2026

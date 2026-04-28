@@ -1,13 +1,8 @@
-# Presentation Demo Guide
-## Distributed Video Processing System - Live Demo Commands
+# Demo Guide - Distributed Video Processing
 
-**Author:** Arun Munagala  
-**Course:** ECC (Elastic Cloud Computing)  
-**Date:** April 27, 2026
+Quick reference for presenting the project.
 
----
-
-## 📋 Pre-Demo Checklist
+## Pre-Demo Checklist
 
 ### Before Your Presentation
 - [ ] Charge your laptop

@@ -1,29 +1,23 @@
 # Hybrid NFS+SSH Video Processing Configuration
 
-# NFS shared directory (must be mounted on all workers)
-# For local testing, uses /tmp; for Jetstream, change to /home/ubuntu/nfs_shared
-nfs_base_dir: "/tmp/video_processing"
+# NFS shared directory (for Jetstream deployment)
+nfs_base_dir: "/home/ubuntu/nfs_shared"
 
 # SSH configuration
-ssh_user: "ubuntu"
-ssh_key: "~/.ssh/jetstream_key"  # Path to SSH private key
+ssh_user: "exouser"
+ssh_key: "~/.ssh/id_rsa"
 
-# Worker nodes (for remote execution on Jetstream)
+# Worker nodes
 workers:
-  - host: "worker1.jetstream-cloud.org"
-  - host: "worker2.jetstream-cloud.org"
-  - host: "worker3.jetstream-cloud.org"
-  - host: "worker4.jetstream-cloud.org"
-
-# For local testing, workers are simulated
-# Set --remote flag to use actual Jetstream workers
+  - host: "149.165.169.199"
+  - host: "149.165.169.58"
+  - host: "149.165.169.92"
+  - host: "149.165.172.111"
 
 # Video processing settings
-segment_duration: 5  # seconds per segment
+segment_duration: 5
 codec: "libx264"
 bitrate: "2M"
-preset: "medium"  # ultrafast, fast, medium, slow
-
-# Processing parameters
-max_retries: 2  # For dynamic scheduling
-timeout: 300  # seconds per task
+preset: "medium"
+max_retries: 2
+timeout: 300
